@@ -19,8 +19,11 @@ export default defineNuxtModule<ModuleOptions>({
   setup(options, nuxt) {
     const resolver = createResolver(import.meta.url)
 
-    // Resolve to src/runtime for GitHub installs (will work for both src and dist)
-    const runtimeDir = resolver.resolve('../runtime')
+    // For GitHub installs, always use src/runtime
+    // The resolver.resolve('.') gives us the directory containing this file
+    const runtimeDir = resolver.resolve('./runtime')
+
+    console.log('🎰 Slots module runtime dir:', runtimeDir)
 
     // Add runtime directory
     nuxt.options.build.transpile.push(runtimeDir)
@@ -31,7 +34,14 @@ export default defineNuxtModule<ModuleOptions>({
       filePath: resolver.resolve(runtimeDir, 'components/SlotsGame.vue')
     })
 
-    // Add pixi.js to transpile list
+    // Add pixi.js and its dependencies to transpile list
     nuxt.options.build.transpile.push('pixi.js')
+    nuxt.options.build.transpile.push('eventemitter3')
+
+    // Add vite optimizations for PixiJS
+    nuxt.options.vite = nuxt.options.vite || {}
+    nuxt.options.vite.optimizeDeps = nuxt.options.vite.optimizeDeps || {}
+    nuxt.options.vite.optimizeDeps.include = nuxt.options.vite.optimizeDeps.include || []
+    nuxt.options.vite.optimizeDeps.include.push('pixi.js', 'eventemitter3')
   }
 })

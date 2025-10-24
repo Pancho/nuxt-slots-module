@@ -10,15 +10,16 @@
   "type": "module",
   "exports": {
     ".": {
-      "types": "./dist/types.d.ts",
-      "import": "./dist/module.mjs",
-      "require": "./dist/module.cjs"
+      "types": "./src/module.ts",
+      "import": "./src/module.ts",
+      "require": "./src/module.ts"
     }
   },
-  "main": "./dist/module.cjs",
-  "types": "./dist/types.d.ts",
+  "main": "./src/module.ts",
+  "types": "./src/module.ts",
   "files": [
-    "dist"
+    "dist",
+    "src"
   ],
   "scripts": {
     "prepack": "unbuild",

@@ -1,0 +1,42 @@
+{
+  "name": "nuxt-slots-module",
+  "version": "1.0.0",
+  "description": "A PixiJS-based slot machine module for Nuxt 3",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/YOUR-USERNAME/nuxt-slots-module.git"
+  },
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/types.d.ts",
+      "import": "./dist/module.mjs",
+      "require": "./dist/module.cjs"
+    }
+  },
+  "main": "./dist/module.cjs",
+  "types": "./dist/types.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "prepack": "unbuild",
+    "dev": "nuxi dev playground",
+    "dev:prepare": "nuxi prepare playground"
+  },
+  "dependencies": {
+    "@nuxt/kit": "^3.14.1592",
+    "pixi.js": "^8.5.2"
+  },
+  "devDependencies": {
+    "@nuxt/devtools": "latest",
+    "@nuxt/schema": "^3.14.1592",
+    "@types/node": "^22.7.5",
+    "nuxt": "^3.14.1592",
+    "typescript": "latest",
+    "unbuild": "^2.0.0",
+    "vite": "^6.0.7",
+    "vue": "^3.5.13"
+  }
+}

@@ -1,5 +1,7 @@
 'use strict';
 
+Object.defineProperty(exports, '__esModule', { value: true });
+
 const kit = require('@nuxt/kit');
 
 var _documentCurrentScript = typeof document !== 'undefined' ? document.currentScript : null;
@@ -34,4 +36,4 @@ const module$1 = kit.defineNuxtModule({
   }
 });
 
-module.exports = module$1;
+exports.default = module$1;

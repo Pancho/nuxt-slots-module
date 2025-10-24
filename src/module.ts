@@ -1,20 +1,10 @@
-import { defineNuxtModule, createResolver, addComponent, addImportsDir } from '@nuxt/kit'
+import { defineNuxtModule, addComponent, createResolver } from '@nuxt/kit'
 
+// Module options TypeScript interface definition
 export interface ModuleOptions {
-  /**
-   * API endpoint for game configuration
-   */
   apiEndpoint?: string
-
-  /**
-   * Default game configuration overrides
-   */
-  defaultConfig?: {
-    initialSpins?: number
-    spinTime?: number
-    rows?: number
-    columns?: number
-  }
+  apiHeaders?: Record<string, string>
+  defaultConfig?: any
 }
 
 export default defineNuxtModule<ModuleOptions>({
@@ -25,39 +15,23 @@ export default defineNuxtModule<ModuleOptions>({
       nuxt: '^3.0.0'
     }
   },
-
-  defaults: {
-    apiEndpoint: 'https://frontend-api.engagefactory.dev/api/boosters/spinner/0/en',
-    defaultConfig: {
-      initialSpins: 15,
-      spinTime: 1500,
-      rows: 4,
-      columns: 5
-    }
-  },
-
+  defaults: {},
   setup(options, nuxt) {
     const resolver = createResolver(import.meta.url)
 
-    // Add runtime config
-    nuxt.options.runtimeConfig.public.slots = {
-      apiEndpoint: options.apiEndpoint,
-      defaultConfig: options.defaultConfig
-    }
+    // Resolve to src/runtime for GitHub installs (will work for both src and dist)
+    const runtimeDir = resolver.resolve('../runtime')
 
-    // Auto-import the component
+    // Add runtime directory
+    nuxt.options.build.transpile.push(runtimeDir)
+
+    // Register SlotsGame component
     addComponent({
       name: 'SlotsGame',
-      filePath: resolver.resolve('./runtime/components/SlotsGame.vue')
+      filePath: resolver.resolve(runtimeDir, 'components/SlotsGame.vue')
     })
 
-    // Auto-import composables
-    addImportsDir(resolver.resolve('./runtime/composables'))
+    // Add pixi.js to transpile list
+    nuxt.options.build.transpile.push('pixi.js')
   }
 })
-
-declare module '@nuxt/schema' {
-  interface PublicRuntimeConfig {
-    slots: ModuleOptions
-  }
-}

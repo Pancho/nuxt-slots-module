@@ -1,4 +1,4 @@
-import { defineNuxtModule, createResolver, addComponent, addImportsDir } from '@nuxt/kit';
+import { defineNuxtModule, createResolver, addComponent } from '@nuxt/kit';
 
 const module = defineNuxtModule({
   meta: {
@@ -8,26 +8,16 @@ const module = defineNuxtModule({
       nuxt: "^3.0.0"
     }
   },
-  defaults: {
-    apiEndpoint: "https://frontend-api.engagefactory.dev/api/boosters/spinner/0/en",
-    defaultConfig: {
-      initialSpins: 15,
-      spinTime: 1500,
-      rows: 4,
-      columns: 5
-    }
-  },
+  defaults: {},
   setup(options, nuxt) {
     const resolver = createResolver(import.meta.url);
-    nuxt.options.runtimeConfig.public.slots = {
-      apiEndpoint: options.apiEndpoint,
-      defaultConfig: options.defaultConfig
-    };
+    const runtimeDir = resolver.resolve("../runtime");
+    nuxt.options.build.transpile.push(runtimeDir);
     addComponent({
       name: "SlotsGame",
-      filePath: resolver.resolve("./runtime/components/SlotsGame.vue")
+      filePath: resolver.resolve(runtimeDir, "components/SlotsGame.vue")
     });
-    addImportsDir(resolver.resolve("./runtime/composables"));
+    nuxt.options.build.transpile.push("pixi.js");
   }
 });
 

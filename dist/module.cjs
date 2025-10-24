@@ -13,26 +13,16 @@ const module$1 = kit.defineNuxtModule({
       nuxt: "^3.0.0"
     }
   },
-  defaults: {
-    apiEndpoint: "https://frontend-api.engagefactory.dev/api/boosters/spinner/0/en",
-    defaultConfig: {
-      initialSpins: 15,
-      spinTime: 1500,
-      rows: 4,
-      columns: 5
-    }
-  },
+  defaults: {},
   setup(options, nuxt) {
     const resolver = kit.createResolver((typeof document === 'undefined' ? require('u' + 'rl').pathToFileURL(__filename).href : (_documentCurrentScript && _documentCurrentScript.tagName.toUpperCase() === 'SCRIPT' && _documentCurrentScript.src || new URL('module.cjs', document.baseURI).href)));
-    nuxt.options.runtimeConfig.public.slots = {
-      apiEndpoint: options.apiEndpoint,
-      defaultConfig: options.defaultConfig
-    };
+    const runtimeDir = resolver.resolve("../runtime");
+    nuxt.options.build.transpile.push(runtimeDir);
     kit.addComponent({
       name: "SlotsGame",
-      filePath: resolver.resolve("./runtime/components/SlotsGame.vue")
+      filePath: resolver.resolve(runtimeDir, "components/SlotsGame.vue")
     });
-    kit.addImportsDir(resolver.resolve("./runtime/composables"));
+    nuxt.options.build.transpile.push("pixi.js");
   }
 });
 

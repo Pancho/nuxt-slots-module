@@ -1,10 +1,9 @@
 <template>
   <div>
-<!--    <h1>Slots Game Test</h1>-->
     <SlotsGame
       style="margin:0;padding:0;"
       ref="gameRef"
-      :api-endpoint="config.public.slots.apiEndpoint"
+      :api-endpoint="'https://frontend-api.engagefactory.dev/api/boosters/spinner/0/en'"
       :api-headers="{
         'ef-ipcountry': 'si',
         'ef-site': 'default'
@@ -21,6 +20,7 @@
 </template>
 
 <script setup lang="ts">
+import {useSlotsGame} from "../src/runtime/composables/useSlotsGame";
 const config = useRuntimeConfig()
 const gameRef = ref()
 const {isSpinning, spinsRemaining, lastWin, spin, canSpin} = useSlotsGame(gameRef)

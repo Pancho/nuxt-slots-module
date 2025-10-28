@@ -342,8 +342,8 @@ const DEFAULT_GAME_CONFIG: GameConfig = {
     },
     gradient: {
         enabled: false,   // Disabled by default - cleaner look
-        height: 20,       
-        intensity: 0.25,  
+        height: 20,
+        intensity: 0.25,
     },
     winAnimation: {
         flashCount: 10,
@@ -358,15 +358,16 @@ const DEFAULT_GAME_CONFIG: GameConfig = {
 // ============================================================================
 export class SlotsEngine {
     private app: Application;
+    private canvas!: HTMLCanvasElement;
     private config: GameConfig;
     private apiData: ApiResponse | null = null;
-    
+
     // Game state
     private remainingSpins: number;
     private running: boolean = false;
     private modalOpen: boolean = false;
     private currentWinOutcome: WinOutcome | null = null;
-    
+
     // UI elements
     private reels: Reel[] = [];
     private reelContainer!: Container;
@@ -377,21 +378,22 @@ export class SlotsEngine {
     private spinCounterText!: Text;
     private spinButton!: Container;
     private infoButton!: Container;
-    
+
     // Textures and assets
     private slotTextures: Record<string, Texture> = {};
     private symbolsArray: string[] = [];
-    
+
     // Particles
     private particles: any[] = [];
-    
+
     // Tweening
     private tweening: any[] = [];
-    
+
     // Event callbacks
     private callbacks: EventCallbacks = {};
 
     constructor(canvas: HTMLCanvasElement, config?: Partial<GameConfig>) {
+        this.canvas = canvas;
         this.config = this.mergeConfig(config);
         this.remainingSpins = this.config.gameplay.initialSpins;
         this.app = new Application();
@@ -401,10 +403,10 @@ export class SlotsEngine {
     // ========================================================================
     // CONFIGURATION & INITIALIZATION
     // ========================================================================
-    
+
     private mergeConfig(partial?: Partial<GameConfig>): GameConfig {
         if (!partial) return { ...DEFAULT_GAME_CONFIG };
-        
+
         return {
             ...DEFAULT_GAME_CONFIG,
             ...partial,
@@ -434,7 +436,7 @@ export class SlotsEngine {
 
     public async fetchGameConfig(apiEndpoint: string, headers?: Record<string, string>): Promise<void> {
         console.log('🌐 Fetching game config from:', apiEndpoint);
-        
+
         const response = await fetch(apiEndpoint, {
             method: 'GET',
             headers: {
@@ -455,7 +457,7 @@ export class SlotsEngine {
             assetsCount: this.apiData.assets.length,
             rewardsCount: this.apiData.rewards.length
         });
-        
+
         // Update config from API
         this.config.grid.rows = this.apiData.rows;
         this.config.grid.columns = this.apiData.columns;
@@ -464,7 +466,7 @@ export class SlotsEngine {
         // Process rewards and build symbols config
         this.processApiData();
         console.log('✅ Processed API data, symbols config created');
-        
+
         // Load assets and create scene
         await this.loadAssets();
         await this.createGameScene();
@@ -486,7 +488,7 @@ export class SlotsEngine {
                 if (!apiAsset) return;
 
                 const symbolKey = `symbol_${asset.id}`;
-                
+
                 if (reward.type === 'bonus') {
                     symbolsConfig[symbolKey] = {
                         type: prizeTypes.BONUS,
@@ -521,7 +523,7 @@ export class SlotsEngine {
             link.rel = 'stylesheet';
             link.href = 'https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;700&display=swap';
             document.head.appendChild(link);
-            
+
             // Wait for fonts to load
             await document.fonts.ready;
         }
@@ -618,7 +620,7 @@ export class SlotsEngine {
 
         this.symbolsArray = Object.keys(this.slotTextures);
         console.log(`✅ Built textures map: ${successCount}/${this.apiData.assets.length} symbols loaded`);
-        
+
         if (this.symbolsArray.length === 0) {
             throw new Error('No textures loaded! All assets failed.');
         }
@@ -633,23 +635,23 @@ export class SlotsEngine {
         console.log('Symbols available:', this.symbolsArray.length);
         console.log('Symbol keys:', this.symbolsArray);
         console.log('Screen size:', this.app.screen.width, 'x', this.app.screen.height);
-        
+
         if (this.symbolsArray.length === 0) {
             throw new Error('No symbols loaded! Cannot create reels.');
         }
-        
+
         // Enable sorting by zIndex
         this.app.stage.sortableChildren = true;
-        
+
         this.calculateGridDimensions();
         console.log('Grid dimensions:', this.config.grid);
-        
+
         // Calculate and log heights
         const topBarHeight = this.config.layout.topBarHeight;
         const bottomBarHeight = this.config.layout.bottomBarHeight;
         const reelHeight = this.config.grid.rows * this.config.grid.symbolSize;
         const totalHeight = topBarHeight + reelHeight + bottomBarHeight;
-        
+
         console.log('📏 HEIGHT BREAKDOWN:');
         console.log('  Screen height:', this.app.screen.height);
         console.log('  Top bar:', topBarHeight);
@@ -657,38 +659,38 @@ export class SlotsEngine {
         console.log('  Bottom bar:', bottomBarHeight);
         console.log('  TOTAL:', totalHeight);
         console.log('  Difference:', this.app.screen.height - totalHeight);
-        
+
         this.createBackgroundParticles();
         console.log('✅ Background particles created');
-        
+
         this.createTopBar();
         console.log('✅ Top bar created');
-        
+
         this.createReels();
         console.log('✅ Reels created');
-        
+
         this.createGradientOverlay();
         console.log('✅ Gradient overlay created');
-        
+
         this.createBottomBar();
         console.log('✅ Bottom bar created');
-        
+
         // Sort all children by zIndex
         this.app.stage.sortChildren();
-        
+
         console.log('🎮 Game scene complete!');
         console.log('Stage children count:', this.app.stage.children.length);
     }
-    
+
     private createDebugHeightOverlay(): void {
         const debugContainer = new Container();
         debugContainer.zIndex = 10000; // On top of everything
-        
+
         const topBarHeight = this.config.layout.topBarHeight;
         const bottomBarHeight = this.config.layout.bottomBarHeight;
         const reelHeight = this.config.grid.rows * this.config.grid.symbolSize;
         const totalHeight = topBarHeight + reelHeight + bottomBarHeight;
-        
+
         const debugStyle = new TextStyle({
             fontFamily: 'Arial',
             fontSize: 14,
@@ -696,25 +698,25 @@ export class SlotsEngine {
             backgroundColor: 0x000000,
             padding: 5
         });
-        
+
         // Top bar height
         const topText = new Text(`Top Bar: ${topBarHeight}px`, debugStyle);
         topText.x = 10;
         topText.y = topBarHeight / 2 - 10;
         debugContainer.addChild(topText);
-        
+
         // Reel height
         const reelText = new Text(`Reels: ${reelHeight}px (${this.config.grid.rows}×${this.config.grid.symbolSize})`, debugStyle);
         reelText.x = 10;
         reelText.y = topBarHeight + reelHeight / 2 - 10;
         debugContainer.addChild(reelText);
-        
+
         // Bottom bar height
         const bottomText = new Text(`Bottom Bar: ${bottomBarHeight}px`, debugStyle);
         bottomText.x = 10;
         bottomText.y = topBarHeight + reelHeight + bottomBarHeight / 2 - 10;
         debugContainer.addChild(bottomText);
-        
+
         // Total
         const totalStyle = new TextStyle({
             fontFamily: 'Arial',
@@ -728,7 +730,7 @@ export class SlotsEngine {
         totalText.x = 10;
         totalText.y = 10;
         debugContainer.addChild(totalText);
-        
+
         this.app.stage.addChild(debugContainer);
         console.log('✅ Debug overlay added to stage');
     }
@@ -935,16 +937,16 @@ export class SlotsEngine {
         const reelHeight = this.config.grid.rows * this.config.grid.symbolSize;
         const totalReelWidth = this.config.grid.columns * this.config.grid.reelWidth;
         const startX = (this.app.screen.width - totalReelWidth) / 2;
-        
+
         const gradientHeight = Math.min(this.config.gradient.height, reelHeight / 4); // Max 1/4 of reel height
 
         // Top gradient - positioned INSIDE the reel area, not at the bar edge
         // Start a few pixels down from the top bar to avoid bleeding
         const topGradient = this.createGradient(
-            startX, 
+            startX,
             startY + 5,  // Offset down by 5px from top bar
-            totalReelWidth, 
-            gradientHeight, 
+            totalReelWidth,
+            gradientHeight,
             true
         );
         topGradient.zIndex = 500;
@@ -961,7 +963,7 @@ export class SlotsEngine {
         );
         bottomGradient.zIndex = 500;
         this.app.stage.addChild(bottomGradient);
-        
+
         console.log('✅ Gradients created:', {
             height: gradientHeight,
             intensity: this.config.gradient.intensity,
@@ -989,9 +991,9 @@ export class SlotsEngine {
             }
 
             // Use configurable intensity
-            gradient.rect(x, y + i * stepHeight, width, stepHeight).fill({ 
-                color: 0x000000, 
-                alpha: alpha * this.config.gradient.intensity 
+            gradient.rect(x, y + i * stepHeight, width, stepHeight).fill({
+                color: 0x000000,
+                alpha: alpha * this.config.gradient.intensity
             });
         }
 
@@ -1035,12 +1037,12 @@ export class SlotsEngine {
             const color = this.interpolateColor(buttonConfig.colors.top, buttonConfig.colors.bottom, ratio);
             gradientBody.rect(0, i, buttonConfig.width, 1).fill({ color });
         }
-        
+
         // Create rounded mask for the gradient
         const gradientMask = new Graphics()
             .roundRect(0, 0, buttonConfig.width, buttonConfig.height, buttonConfig.borderRadius)
             .fill({ color: 0xffffff });
-        
+
         gradientBody.mask = gradientMask;
         button3D.addChild(gradientMask); // Add mask to display tree
         button3D.addChild(gradientBody);
@@ -1873,11 +1875,53 @@ export class SlotsEngine {
         return this.running;
     }
 
-    public resize(): void {
-        // Recalculate dimensions and reposition elements
+    public async resize(): Promise<void> {
+        // Store current game state
+        const currentSpins = this.remainingSpins;
+        const wasRunning = this.running;
+
+        // Stop any ongoing animations
+        if (wasRunning) {
+            this.running = false;
+        }
+
+        // Clear all tweens
+        this.tweening = [];
+
+        // Remove all children from stage
+        this.app.stage.removeChildren();
+
+        // Destroy existing containers but keep textures
+        if (this.topBar) this.topBar.destroy({ children: true });
+        if (this.bottomBar) this.bottomBar.destroy({ children: true });
+        if (this.reelContainer) this.reelContainer.destroy({ children: true });
+
+        this.reels = [];
+        this.particles = [];
+
+        // Resize the renderer
+        this.app.renderer.resize(this.canvas.clientWidth, this.canvas.clientHeight);
+
+        // Recalculate grid dimensions
         this.calculateGridDimensions();
-        // You would need to update positions of all UI elements here
-        // This is a simplified version - full implementation would reposition everything
+
+        // Rebuild the entire scene (same order as createGameScene)
+        this.app.stage.sortableChildren = true;
+        this.createBackgroundParticles();
+        this.createTopBar();
+        this.createReels();
+        this.createGradientOverlay();
+        this.createBottomBar();
+        this.app.stage.sortChildren();
+
+        // Restore game state
+        this.remainingSpins = currentSpins;
+        this.running = wasRunning;
+
+        // Update UI with current state
+        if (this.spinCounterText) {
+            this.spinCounterText.text = this.config.text.spinCounter(this.remainingSpins);
+        }
     }
 
     public destroy(): void {

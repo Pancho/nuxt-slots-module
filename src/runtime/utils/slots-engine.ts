@@ -4,6 +4,7 @@ import {
     BlurFilter,
     Container,
     Graphics,
+    Rectangle,
     Sprite,
     Text,
     TextStyle,
@@ -124,11 +125,21 @@ interface WinOutcome {
     reward: ApiReward;
 }
 
+// NEW: Server spin configuration
+export interface ServerSpinConfig {
+    endpoint: string;
+    headers?: Record<string, string>;
+    gameId: string | number;
+    userId?: string;
+    sessionId?: string;
+}
+
 interface EventCallbacks {
     onSpinStart?: () => void;
     onSpinComplete?: (result: { won: boolean; reward?: ApiReward }) => void;
     onSpinsUpdate?: (remaining: number) => void;
     onWin?: (reward: ApiReward) => void;
+    onSpinError?: (error: Error) => void;  // NEW: Handle server errors
 }
 
 // ============================================================================
@@ -365,6 +376,7 @@ export class SlotsEngine {
     // Game state
     private remainingSpins: number;
     private running: boolean = false;
+    private isResizing: boolean = false;
     private modalOpen: boolean = false;
     private currentWinOutcome: WinOutcome | null = null;
 
@@ -392,9 +404,13 @@ export class SlotsEngine {
     // Event callbacks
     private callbacks: EventCallbacks = {};
 
-    constructor(canvas: HTMLCanvasElement, config?: Partial<GameConfig>) {
+    // NEW: Server spin configuration
+    private serverSpinConfig?: ServerSpinConfig;
+
+    constructor(canvas: HTMLCanvasElement, config?: Partial<GameConfig>, serverConfig?: ServerSpinConfig) {
         this.canvas = canvas;
         this.config = this.mergeConfig(config);
+        this.serverSpinConfig = serverConfig;
         this.remainingSpins = this.config.gameplay.initialSpins;
         this.app = new Application();
         this.initializeApp(canvas);
@@ -1022,6 +1038,7 @@ export class SlotsEngine {
         this.spinButton = new Container();
         this.spinButton.eventMode = 'static';
         this.spinButton.cursor = 'pointer';
+        this.spinButton.interactiveChildren = false; // Children should not intercept events
 
         const button3D = new Graphics();
 
@@ -1077,6 +1094,9 @@ export class SlotsEngine {
         this.spinButton.x = (this.app.screen.width - buttonConfig.width) / 2;
         this.spinButton.y = (this.config.layout.bottomBarHeight - buttonConfig.height) / 2;
 
+        // Define explicit hit area to ensure clicks are registered
+        this.spinButton.hitArea = new Rectangle(0, 0, buttonConfig.width, buttonConfig.height);
+
         this.spinButton.on('pointerdown', () => {
             this.spinButton.y += buttonConfig.pressOffset;
         });
@@ -1131,7 +1151,70 @@ export class SlotsEngine {
     // GAME LOGIC
     // ========================================================================
 
-    private determineWinOutcome(): WinOutcome | null {
+    /**
+     * Determine win outcome - calls server for secure win determination
+     * Falls back to client-side for development/testing if no server config
+     */
+    private async determineWinOutcome(): Promise<WinOutcome | null> {
+        // If no server config, fall back to client-side (for development/testing only)
+        if (!this.serverSpinConfig) {
+            console.warn('⚠️ No server config - using CLIENT-SIDE win determination (NOT FOR PRODUCTION!)');
+            return this.determineWinOutcomeClientSide();
+        }
+
+        try {
+            // Call the server to determine win outcome
+            const response = await fetch(this.serverSpinConfig.endpoint, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(this.serverSpinConfig.headers || {})
+                },
+                body: JSON.stringify({
+                    gameId: this.serverSpinConfig.gameId,
+                    userId: this.serverSpinConfig.userId,
+                    sessionId: this.serverSpinConfig.sessionId
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`Server responded with ${response.status}: ${response.statusText}`);
+            }
+
+            const data = await response.json();
+
+            // Update remaining spins from server response
+            if (typeof data.remainingSpins === 'number') {
+                this.remainingSpins = data.remainingSpins;
+                this.updateSpinCounter();
+
+                if (this.callbacks.onSpinsUpdate) {
+                    this.callbacks.onSpinsUpdate(this.remainingSpins);
+                }
+            }
+
+            // Return the server's decision
+            return data.outcome || null;
+
+        } catch (error) {
+            console.error('❌ Failed to get spin result from server:', error);
+
+            // Notify about the error
+            if (this.callbacks.onSpinError) {
+                this.callbacks.onSpinError(error as Error);
+            }
+
+            // Re-throw to prevent the spin from continuing
+            throw error;
+        }
+    }
+
+    /**
+     * CLIENT-SIDE win determination (for development/testing only)
+     * This should NOT be used in production as it can be manipulated
+     * @deprecated Use server-side determination in production
+     */
+    private determineWinOutcomeClientSide(): WinOutcome | null {
         if (!this.config.symbols) return null;
 
         const totalWeight = Object.values(this.config.symbols).reduce((sum: number, s: any) => sum + s.weight, 0);
@@ -1187,7 +1270,7 @@ export class SlotsEngine {
     }
 
     public async startPlay(): Promise<void> {
-        if (this.running || this.modalOpen) {
+        if (this.running || this.modalOpen || this.isResizing) {
             return;
         }
         if (this.remainingSpins <= 0) {
@@ -1196,72 +1279,98 @@ export class SlotsEngine {
         }
 
         this.running = true;
-        this.remainingSpins--;
-        this.updateSpinCounter();
+
+        // Don't decrement spins here if using server - server will handle it
+        if (!this.serverSpinConfig) {
+            // Only decrement client-side if not using server
+            this.remainingSpins--;
+            this.updateSpinCounter();
+        }
 
         if (this.callbacks.onSpinStart) {
             this.callbacks.onSpinStart();
         }
 
-        if (this.callbacks.onSpinsUpdate) {
+        // Notify about spins update if not using server (server will update later)
+        if (!this.serverSpinConfig && this.callbacks.onSpinsUpdate) {
             this.callbacks.onSpinsUpdate(this.remainingSpins);
         }
 
-        this.currentWinOutcome = this.determineWinOutcome();
+        try {
+            // Get win outcome from server (or client-side for testing)
+            this.currentWinOutcome = await this.determineWinOutcome();
 
-        const reelSymbols = this.buildReelsForOutcome(this.currentWinOutcome);
-        this.rebuildReels(reelSymbols);
+            const reelSymbols = this.buildReelsForOutcome(this.currentWinOutcome);
+            this.rebuildReels(reelSymbols);
 
-        const tweenPromises = [];
+            const tweenPromises = [];
 
-        for (let i = 0; i < this.reels.length; i++) {
-            const r = this.reels[i];
-            const extra = Math.floor(Math.random() * this.config.grid.rows);
+            for (let i = 0; i < this.reels.length; i++) {
+                const r = this.reels[i];
+                const extra = Math.floor(Math.random() * this.config.grid.rows);
 
-            let target: number;
-            if (this.currentWinOutcome) {
-                const rowPosition = this.currentWinOutcome.positions[i];
-                const symbolIndex = rowPosition + 1;
-                const baseTarget =
-                    r.position +
-                    this.config.gameplay.baseSpinRotations +
-                    i * this.config.grid.columns +
-                    extra;
-                const desiredMod = (rowPosition + 1 - symbolIndex + r.symbols.length) % r.symbols.length;
-                target = baseTarget - (baseTarget % r.symbols.length) + desiredMod;
-                if (target < baseTarget) target += r.symbols.length;
-            } else {
-                target =
-                    r.position +
-                    this.config.gameplay.baseSpinRotations +
-                    i * this.config.grid.columns +
-                    extra;
+                let target: number;
+                if (this.currentWinOutcome) {
+                    const rowPosition = this.currentWinOutcome.positions[i];
+                    const symbolIndex = rowPosition + 1;
+                    const baseTarget =
+                        r.position +
+                        this.config.gameplay.baseSpinRotations +
+                        i * this.config.grid.columns +
+                        extra;
+                    const desiredMod = (rowPosition + 1 - symbolIndex + r.symbols.length) % r.symbols.length;
+                    target = baseTarget - (baseTarget % r.symbols.length) + desiredMod;
+                    if (target < baseTarget) target += r.symbols.length;
+                } else {
+                    target =
+                        r.position +
+                        this.config.gameplay.baseSpinRotations +
+                        i * this.config.grid.columns +
+                        extra;
+                }
+
+                while (target <= r.position) {
+                    target += r.symbols.length;
+                }
+
+                const time =
+                    this.config.gameplay.spinTime +
+                    i * this.config.gameplay.reelStaggerTime +
+                    extra * this.config.gameplay.reelStaggerTime;
+
+                const promise = this.tweenTo(
+                    r,
+                    'position',
+                    target,
+                    time,
+                    this.backout(this.config.gameplay.backoutAmount),
+                    null,
+                    null
+                );
+
+                tweenPromises.push(promise);
             }
 
-            while (target <= r.position) {
-                target += r.symbols.length;
+            await Promise.all(tweenPromises);
+            this.reelsComplete();
+
+        } catch (error) {
+            // Handle error - reset game state
+            this.running = false;
+            console.error('Spin failed:', error);
+
+            // Restore spins count if we decremented it
+            if (!this.serverSpinConfig) {
+                this.remainingSpins++;
+                this.updateSpinCounter();
+
+                if (this.callbacks.onSpinsUpdate) {
+                    this.callbacks.onSpinsUpdate(this.remainingSpins);
+                }
             }
 
-            const time =
-                this.config.gameplay.spinTime +
-                i * this.config.gameplay.reelStaggerTime +
-                extra * this.config.gameplay.reelStaggerTime;
-
-            const promise = this.tweenTo(
-                r,
-                'position',
-                target,
-                time,
-                this.backout(this.config.gameplay.backoutAmount),
-                null,
-                null
-            );
-
-            tweenPromises.push(promise);
+            alert('Spin failed. Please try again.');
         }
-
-        await Promise.all(tweenPromises);
-        this.reelsComplete();
     }
 
     private reelsComplete(): void {
@@ -1855,7 +1964,7 @@ export class SlotsEngine {
     // PUBLIC API
     // ========================================================================
 
-    public on(event: 'spinStart' | 'spinComplete' | 'spinsUpdate' | 'win', callback: Function): void {
+    public on(event: 'spinStart' | 'spinComplete' | 'spinsUpdate' | 'win' | 'spinError', callback: Function): void {
         if (event === 'spinStart') {
             this.callbacks.onSpinStart = callback as () => void;
         } else if (event === 'spinComplete') {
@@ -1864,7 +1973,16 @@ export class SlotsEngine {
             this.callbacks.onSpinsUpdate = callback as (remaining: number) => void;
         } else if (event === 'win') {
             this.callbacks.onWin = callback as (reward: ApiReward) => void;
+        } else if (event === 'spinError') {
+            this.callbacks.onSpinError = callback as (error: Error) => void;
         }
+    }
+
+    /**
+     * Update server spin configuration dynamically
+     */
+    public setServerSpinConfig(config: ServerSpinConfig): void {
+        this.serverSpinConfig = config;
     }
 
     public getSpinsRemaining(): number {
@@ -1876,6 +1994,13 @@ export class SlotsEngine {
     }
 
     public async resize(): Promise<void> {
+        // Prevent multiple simultaneous resizes
+        if (this.isResizing) {
+            return;
+        }
+
+        this.isResizing = true;
+
         // Store current game state
         const currentSpins = this.remainingSpins;
         const wasRunning = this.running;
@@ -1888,13 +2013,27 @@ export class SlotsEngine {
         // Clear all tweens
         this.tweening = [];
 
+        // Remove event listeners from interactive elements before destroying
+        if (this.spinButton) {
+            this.spinButton.removeAllListeners();
+        }
+        if (this.infoButton) {
+            this.infoButton.removeAllListeners();
+        }
+
         // Remove all children from stage
         this.app.stage.removeChildren();
 
         // Destroy existing containers but keep textures
-        if (this.topBar) this.topBar.destroy({ children: true });
-        if (this.bottomBar) this.bottomBar.destroy({ children: true });
-        if (this.reelContainer) this.reelContainer.destroy({ children: true });
+        if (this.topBar) {
+            this.topBar.destroy({ children: true });
+        }
+        if (this.bottomBar) {
+            this.bottomBar.destroy({ children: true });
+        }
+        if (this.reelContainer) {
+            this.reelContainer.destroy({ children: true });
+        }
 
         this.reels = [];
         this.particles = [];
@@ -1922,6 +2061,12 @@ export class SlotsEngine {
         if (this.spinCounterText) {
             this.spinCounterText.text = this.config.text.spinCounter(this.remainingSpins);
         }
+
+        // Wait one frame for PixiJS to process event listener attachments
+        await new Promise(resolve => requestAnimationFrame(resolve));
+
+        // NOW clear the resizing flag - button is fully ready
+        this.isResizing = false;
     }
 
     public destroy(): void {

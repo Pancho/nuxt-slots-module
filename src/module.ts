@@ -1,4 +1,4 @@
-import { defineNuxtModule, addComponent, createResolver } from '@nuxt/kit'
+import {defineNuxtModule, addComponent, addServerHandler, createResolver} from '@nuxt/kit'
 
 // Module options TypeScript interface definition
 export interface ModuleOptions {
@@ -23,7 +23,12 @@ export default defineNuxtModule<ModuleOptions>({
     // The resolver.resolve('.') gives us the directory containing this file
     const runtimeDir = resolver.resolve('./runtime')
 
-    console.log('🎰 Slots module runtime dir:', runtimeDir)
+    addServerHandler({
+      route: '/api/slots/spin',
+      handler: resolver.resolve(runtimeDir, 'server/api/slots/spin.post')
+    })
+
+    console.log('Slots module runtime dir:', runtimeDir)
 
     // Add runtime directory
     nuxt.options.build.transpile.push(runtimeDir)

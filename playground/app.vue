@@ -11,16 +11,22 @@
       @ready="onGameReady"
       @win="onWin"
       @spin-complete="onSpinComplete"
+      :server-spin="{
+        endpoint: '/api/slots/spin',
+        gameId: 1,
+        userId: 'user-123'
+      }"
     />
 
-<!--    <button @click="triggerSpin" :disabled="!canSpin">-->
-<!--      Spin ({{ spinsRemaining }} left)-->
-<!--    </button>-->
+    <!--    <button @click="triggerSpin" :disabled="!canSpin">-->
+    <!--      Spin ({{ spinsRemaining }} left)-->
+    <!--    </button>-->
   </div>
 </template>
 
 <script setup lang="ts">
 import {useSlotsGame} from "../src/runtime/composables/useSlotsGame";
+
 const config = useRuntimeConfig()
 const gameRef = ref()
 const {isSpinning, spinsRemaining, lastWin, spin, canSpin} = useSlotsGame(gameRef)

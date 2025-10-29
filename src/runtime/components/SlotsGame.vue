@@ -9,7 +9,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, nextTick } from 'vue'
 import { SlotsEngine } from '../utils/slots-engine'
-import type { GameConfig, ApiReward } from '../utils/slots-engine'
+import type { GameConfig, ApiReward, ServerSpinConfig } from '../utils/slots-engine'
 
 export interface SlotsGameProps {
   /**
@@ -31,6 +31,18 @@ export interface SlotsGameProps {
    * Auto-start the game after initialization
    */
   autoStart?: boolean
+
+  /**
+   * Server spin endpoint configuration (NEW)
+   * This is where the server determines win outcomes
+   */
+  serverSpin?: {
+    endpoint: string
+    gameId: string | number
+    userId?: string
+    sessionId?: string
+    headers?: Record<string, string>
+  }
 }
 
 const props = withDefaults(defineProps<SlotsGameProps>(), {
@@ -87,8 +99,17 @@ onMounted(async () => {
   console.log('✅ Canvas element found:', canvasRef.value)
 
   try {
-    // Create the game engine
-    engine = new SlotsEngine(canvasRef.value, props.config)
+    // Prepare server spin configuration if provided
+    const serverSpinConfig: ServerSpinConfig | undefined = props.serverSpin ? {
+      endpoint: props.serverSpin.endpoint,
+      gameId: props.serverSpin.gameId,
+      userId: props.serverSpin.userId,
+      sessionId: props.serverSpin.sessionId,
+      headers: props.serverSpin.headers
+    } : undefined
+
+    // Create the game engine with server config
+    engine = new SlotsEngine(canvasRef.value, props.config, serverSpinConfig)
 
     // Fetch game configuration if API endpoint provided
     if (props.apiEndpoint) {
@@ -112,6 +133,12 @@ onMounted(async () => {
       emit('spinComplete', result)
     })
 
+    // NEW: Handle spin errors from server
+    engine.on('spinError', (error: Error) => {
+      console.error('Spin error:', error)
+      emit('error', error)
+    })
+
     emit('ready')
   } catch (error) {
     console.error('Failed to initialize slots game:', error)
@@ -129,6 +156,7 @@ onUnmounted(() => {
 // Handle window resize with debounce
 let resizeTimeout: ReturnType<typeof setTimeout> | null = null
 let resizeObserver: ResizeObserver | null = null
+let isResizing = false
 const RESIZE_DEBOUNCE_MS = 250
 
 const handleResize = () => {
@@ -136,9 +164,17 @@ const handleResize = () => {
     clearTimeout(resizeTimeout)
   }
 
-  resizeTimeout = setTimeout(() => {
-    if (engine) {
-      engine.resize()
+  resizeTimeout = setTimeout(async () => {
+    if (engine && !isResizing) {
+      try {
+        isResizing = true
+        await engine.resize()
+      } catch (error) {
+        console.error('Error during resize:', error)
+        emit('error', error as Error)
+      } finally {
+        isResizing = false
+      }
     }
   }, RESIZE_DEBOUNCE_MS)
 }
@@ -192,11 +228,21 @@ const isSpinning = (): boolean => {
   return engine?.isSpinning() || false
 }
 
+/**
+ * Update server spin configuration dynamically (NEW)
+ */
+const updateServerConfig = (config: ServerSpinConfig) => {
+  if (engine) {
+    engine.setServerSpinConfig(config)
+  }
+}
+
 // Expose methods to parent component
 defineExpose({
   spin,
   getSpinsRemaining,
-  isSpinning
+  isSpinning,
+  updateServerConfig  // NEW: Allow dynamic config updates
 })
 </script>
 
